@@ -1,2 +1,2 @@
 export { sendMessage, getProviderInfo } from './aiService';
-export { AI_CONFIG, isAIConfigured } from './aiConfig';
+export { AI_CONFIG } from './aiConfig';

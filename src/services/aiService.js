@@ -1,13 +1,12 @@
 /**
  * Unified AI Service
  *
- * Routes to the configured AI provider (Claude / Gemini / Mock).
- * Provides a single interface for the rest of the app.
+ * Routes to serverless API proxy or offline mock.
+ * Single interface for the rest of the app.
  */
 
-import { AI_CONFIG, isAIConfigured } from "./aiConfig";
-import { callClaude } from "./claudeAI";
-import { callGemini } from "./geminiAI";
+import { AI_CONFIG } from "./aiConfig";
+import { callAPI } from "./apiClient";
 import { getMockResponse } from "./mockAI";
 
 /**
@@ -18,44 +17,33 @@ import { getMockResponse } from "./mockAI";
  * @returns {Promise<{ text: string, provider: string }>}
  */
 export async function sendMessage(message, context = {}) {
-  const provider = AI_CONFIG.provider;
+  const { provider } = AI_CONFIG;
 
-  // Always fall back to mock if not configured
-  if (!isAIConfigured()) {
-    console.warn(`AI provider "${provider}" not configured. Using mock.`);
+  // Mock mode — no API call
+  if (provider === "mock") {
+    // Simulate slight delay for realism
+    await new Promise((r) => setTimeout(r, 400));
     return {
       text: getMockResponse(message, context),
       provider: "mock",
     };
   }
 
+  // API mode — call serverless function
   try {
-    let text;
-
-    switch (provider) {
-      case "claude":
-        text = await callClaude(message, context);
-        break;
-
-      case "gemini":
-        text = await callGemini(message, context);
-        break;
-
-      case "mock":
-      default:
-        text = getMockResponse(message, context);
-        break;
-    }
-
-    return { text, provider };
+    const result = await callAPI(message, context);
+    return {
+      text: result.text,
+      provider: result.provider || "gemini",
+    };
   } catch (error) {
-    console.error(`AI (${provider}) error:`, error);
+    console.error("AI API error:", error);
 
-    // Fall back to mock on any API error
+    // Fall back to mock on any error
     return {
       text:
         getMockResponse(message, context) +
-        `\n\n---\n⚠️ *AI service unavailable (${error.message}). Showing offline guidance.*`,
+        "\n\n---\n⚠️ *AI service temporarily unavailable. Showing offline guidance.*",
       provider: "mock-fallback",
     };
   }
@@ -65,18 +53,11 @@ export async function sendMessage(message, context = {}) {
  * Get the current AI provider info for display.
  */
 export function getProviderInfo() {
-  const provider = AI_CONFIG.provider;
-  const configured = isAIConfigured();
+  const { provider } = AI_CONFIG;
 
-  const labels = {
-    claude: { name: "Claude (Anthropic)", icon: "🤖" },
-    gemini: { name: "Gemini (Google)", icon: "✨" },
-    mock: { name: "Offline Mode", icon: "📚" },
-  };
+  if (provider === "mock") {
+    return { name: "Offline Mode", icon: "📚", provider: "mock", configured: true };
+  }
 
-  return {
-    ...labels[provider] || labels.mock,
-    provider,
-    configured,
-  };
+  return { name: "Gemini AI", icon: "✨", provider: "api", configured: true };
 }
